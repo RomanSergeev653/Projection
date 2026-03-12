@@ -18,6 +18,7 @@ import {
 import { calculateDailyWorkload, distributeProjectHours } from './services/distributionService';
 import { importProjectsFromJson, ImportData } from './services/importService';
 import { eachDayOfInterval, format, getDay, startOfDay, isBefore } from 'date-fns';
+import { generateUUID } from './utils/uuid';
 import './App.css';
 
 function App() {
@@ -68,7 +69,7 @@ function App() {
           if (isWeekend) {
             // Выходной день - 0 часов
             newOverrides.push({
-              id: crypto.randomUUID(),
+              id: generateUUID(),
               projectId: project.id,
               date: day,
               hours: 0,
@@ -77,7 +78,7 @@ function App() {
             // Прошедший день - берем значение из текущего распределения
             const hours = distributionMap.get(dateKey) || 0;
             newOverrides.push({
-              id: crypto.randomUUID(),
+              id: generateUUID(),
               projectId: project.id,
               date: day,
               hours: hours,
@@ -97,7 +98,7 @@ function App() {
   const handleCreateProject = (projectData: Omit<Project, 'id' | 'createdAt'>) => {
     const newProject: Project = {
       ...projectData,
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       createdAt: new Date(),
     };
     const updatedProjects = [...projects, newProject];
@@ -133,7 +134,7 @@ function App() {
         if (isWeekend) {
           // Выходной день - 0 часов
           newOverrides.push({
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             projectId: newProject.id,
             date: day,
             hours: 0,
@@ -142,7 +143,7 @@ function App() {
           // Прошедший день - берем значение из распределения (прошедшие дни участвуют в распределении)
           const hours = distributionMap.get(dateKey) || 0;
           newOverrides.push({
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             projectId: newProject.id,
             date: day,
             hours: hours,
@@ -230,12 +231,12 @@ function App() {
       );
     } else {
       // Создаём новый override (включая 0)
-      const newOverride: DayOverride = {
-        id: crypto.randomUUID(),
-        projectId,
-        date,
-        hours,
-      };
+        const newOverride: DayOverride = {
+          id: generateUUID(),
+          projectId,
+          date,
+          hours,
+        };
       updatedOverrides = [...overrides, newOverride];
     }
 
@@ -354,7 +355,7 @@ function App() {
             
             if (!existingOverride) {
               updatedOverrides.push({
-                id: crypto.randomUUID(),
+                id: generateUUID(),
                 projectId: project.id,
                 date: day,
                 hours: 0,
