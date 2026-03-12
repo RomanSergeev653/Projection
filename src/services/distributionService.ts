@@ -24,13 +24,13 @@ export function distributeProjectHours(
   const remainingHours = project.totalHours - fixedHours;
   
   const overrideDays = new Set(projectOverrides.map(o => format(o.date, 'yyyy-MM-dd')));
-  // Исключаем выходные дни, прошедшие дни и дни с override
+  // Исключаем выходные дни и дни с override
+  // Прошедшие дни участвуют в распределении только если для них нет override
   const freeDays = days.filter(day => {
     const dayOfWeek = getDay(day); // 0 = воскресенье, 6 = суббота
     const isWeekend = weekendDays.includes(dayOfWeek);
-    const isPast = isBefore(day, today);
     const hasOverride = overrideDays.has(format(day, 'yyyy-MM-dd'));
-    return !isWeekend && !isPast && !hasOverride;
+    return !isWeekend && !hasOverride;
   });
   
   const autoHours = freeDays.length > 0 ? remainingHours / freeDays.length : 0;
@@ -51,20 +51,13 @@ export function distributeProjectHours(
       };
     }
     
-    // Прошедшие дни всегда должны иметь override (создается автоматически в App.tsx)
-    // Если override нет, используем 0 (на случай если день только что стал прошедшим)
-    if (isPast && !hasOverride) {
-      return {
-        date: day,
-        hours: 0,
-        isOverride: true,
-      };
-    }
+    // Прошедшие дни участвуют в распределении, если для них нет override
+    // После создания override для прошедших дней они больше не перераспределяются
     
     return {
       date: day,
       hours: hasOverride ? overrideMap.get(dateKey)! : autoHours,
-      isOverride: hasOverride || isWeekend || isPast,
+      isOverride: hasOverride || isWeekend, // Прошедшие дни без override не помечаются как override
     };
   });
 }

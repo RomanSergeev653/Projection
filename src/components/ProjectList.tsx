@@ -8,9 +8,10 @@ interface ProjectListProps {
   overrides: DayOverride[];
   settings: AppSettings;
   onDelete: (id: string) => void;
+  onEdit: (project: Project) => void;
 }
 
-export function ProjectList({ projects, overrides, settings, onDelete }: ProjectListProps) {
+export function ProjectList({ projects, overrides, settings, onDelete, onEdit }: ProjectListProps) {
   if (projects.length === 0) {
     return <div className="empty-state">Нет проектов. Создайте первый проект!</div>;
   }
@@ -30,16 +31,26 @@ export function ProjectList({ projects, overrides, settings, onDelete }: Project
             >
               <div className="project-header">
                 <h3>{project.name}</h3>
-                <button
-                  className="delete-btn"
-                  onClick={() => {
-                    if (confirm(`Удалить проект "${project.name}"?`)) {
-                      onDelete(project.id);
-                    }
-                  }}
-                >
-                  ×
-                </button>
+                <div className="project-header-actions">
+                  <button
+                    className="edit-project-btn"
+                    onClick={() => onEdit(project)}
+                    title="Редактировать проект"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    className="delete-btn"
+                    onClick={() => {
+                      if (confirm(`Удалить проект "${project.name}"?`)) {
+                        onDelete(project.id);
+                      }
+                    }}
+                    title="Удалить проект"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
               <div className="project-info">
                 <div>Начало: {formatDate(project.startDate)}</div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Project, DayOverride, AppSettings } from './models/types';
 import { ProjectForm } from './components/ProjectForm';
+import { ProjectEditForm } from './components/ProjectEditForm';
 import { ProjectList } from './components/ProjectList';
 import { ProjectTimeline } from './components/ProjectTimeline';
 import { WorkloadChart } from './components/WorkloadChart';
@@ -15,6 +16,7 @@ import {
   saveSettings,
 } from './services/storageService';
 import { calculateDailyWorkload, distributeProjectHours } from './services/distributionService';
+import { importProjectsFromJson, ImportData } from './services/importService';
 import { eachDayOfInterval, format, getDay, startOfDay, isBefore } from 'date-fns';
 import './App.css';
 
@@ -24,6 +26,7 @@ function App() {
   const [settings, setSettings] = useState<AppSettings>({ maxDailyHours: 8, weekendDays: [0, 6] });
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
 
   useEffect(() => {
     const loadedProjects = loadProjects();
@@ -100,6 +103,60 @@ function App() {
     const updatedProjects = [...projects, newProject];
     setProjects(updatedProjects);
     saveProjects(updatedProjects);
+    
+    // Создаем override для выходных дней и прошедших дней нового проекта
+    const today = startOfDay(new Date());
+    const newOverrides: DayOverride[] = [];
+    const days = eachDayOfInterval({
+      start: newProject.startDate,
+      end: newProject.deadline,
+    });
+    
+    // Вычисляем распределение для нового проекта (без override для прошедших дней)
+    const distribution = distributeProjectHours(newProject, overrides, settings.weekendDays);
+    const distributionMap = new Map(
+      distribution.map(d => [format(d.date, 'yyyy-MM-dd'), d.hours])
+    );
+    
+    days.forEach(day => {
+      const dayOfWeek = getDay(day);
+      const isWeekend = settings.weekendDays.includes(dayOfWeek);
+      const isPast = isBefore(day, today);
+      const dateKey = format(day, 'yyyy-MM-dd');
+      
+      // Проверяем, нет ли уже override для этого дня
+      const existingOverride = overrides.find(
+        o => o.projectId === newProject.id && format(o.date, 'yyyy-MM-dd') === dateKey
+      );
+      
+      if (!existingOverride) {
+        if (isWeekend) {
+          // Выходной день - 0 часов
+          newOverrides.push({
+            id: crypto.randomUUID(),
+            projectId: newProject.id,
+            date: day,
+            hours: 0,
+          });
+        } else if (isPast) {
+          // Прошедший день - берем значение из распределения (прошедшие дни участвуют в распределении)
+          const hours = distributionMap.get(dateKey) || 0;
+          newOverrides.push({
+            id: crypto.randomUUID(),
+            projectId: newProject.id,
+            date: day,
+            hours: hours,
+          });
+        }
+      }
+    });
+    
+    if (newOverrides.length > 0) {
+      const updatedOverrides = [...overrides, ...newOverrides];
+      setOverrides(updatedOverrides);
+      saveOverrides(updatedOverrides);
+    }
+    
     setShowProjectForm(false);
   };
 
@@ -111,6 +168,44 @@ function App() {
     saveProjects(updatedProjects);
     saveOverrides(updatedOverrides);
   };
+
+  const handleUpdateProject = (updatedProject: Project) => {
+    const project = projects.find(p => p.id === updatedProject.id);
+    if (!project) return;
+
+    const today = startOfDay(new Date());
+    const deadlineChanged = updatedProject.deadline.getTime() !== project.deadline.getTime();
+    const startDateChanged = updatedProject.startDate.getTime() !== project.startDate.getTime();
+    
+    // Обновляем проект
+    const updatedProjects = projects.map(p =>
+      p.id === updatedProject.id ? updatedProject : p
+    );
+    setProjects(updatedProjects);
+    saveProjects(updatedProjects);
+
+    // Если изменился дедлайн или дата начала, удаляем все overrides для этого проекта, кроме:
+    // 1. Прошедших дней (isBefore(date, today))
+    // 2. Выходных дней (weekendDays)
+    if (deadlineChanged || startDateChanged) {
+      const updatedOverrides = overrides.filter(override => {
+        if (override.projectId !== updatedProject.id) return true; // Оставляем overrides других проектов
+        
+        const isPast = isBefore(override.date, today);
+        const dayOfWeek = getDay(override.date);
+        const isWeekend = settings.weekendDays.includes(dayOfWeek);
+        
+        // Удаляем только если это не прошедший день и не выходной
+        return isPast || isWeekend;
+      });
+
+      setOverrides(updatedOverrides);
+      saveOverrides(updatedOverrides);
+    }
+
+    setEditingProject(null);
+  };
+
 
   const handleDayEdit = (date: Date, projectId: string, hours: number) => {
     const project = projects.find(p => p.id === projectId);
@@ -129,25 +224,19 @@ function App() {
     let updatedOverrides: DayOverride[];
     
     if (existingOverride) {
-      if (hours === 0) {
-        updatedOverrides = overrides.filter(o => o.id !== existingOverride.id);
-      } else {
-        updatedOverrides = overrides.map(o =>
-          o.id === existingOverride.id ? { ...o, hours } : o
-        );
-      }
+      // Обновляем существующий override (включая 0)
+      updatedOverrides = overrides.map(o =>
+        o.id === existingOverride.id ? { ...o, hours } : o
+      );
     } else {
-      if (hours > 0) {
-        const newOverride: DayOverride = {
-          id: crypto.randomUUID(),
-          projectId,
-          date,
-          hours,
-        };
-        updatedOverrides = [...overrides, newOverride];
-      } else {
-        updatedOverrides = overrides;
-      }
+      // Создаём новый override (включая 0)
+      const newOverride: DayOverride = {
+        id: crypto.randomUUID(),
+        projectId,
+        date,
+        hours,
+      };
+      updatedOverrides = [...overrides, newOverride];
     }
 
     setOverrides(updatedOverrides);
@@ -168,6 +257,61 @@ function App() {
     );
     setOverrides(updatedOverrides);
     saveOverrides(updatedOverrides);
+  };
+
+  const handleImportProjects = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      // Читаем файл как текст с правильной кодировкой
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        try {
+          const text = e.target?.result as string;
+          if (!text || text.trim() === '') {
+            alert('Файл пуст или не может быть прочитан');
+            return;
+          }
+
+          const importData: ImportData = JSON.parse(text);
+          
+          if (!importData.status || !importData.response?.tasks) {
+            alert('Неверный формат файла. Ожидается JSON с полями status и response.tasks');
+            return;
+          }
+
+          const updatedProjects = importProjectsFromJson(importData, projects);
+          const importedCount = updatedProjects.length - projects.length;
+          
+          if (importedCount === 0) {
+            alert('Нет новых проектов для импорта. Все проекты уже существуют.');
+            return;
+          }
+
+          setProjects(updatedProjects);
+          saveProjects(updatedProjects);
+          
+          alert(`Успешно импортировано проектов: ${importedCount}`);
+        } catch (parseError) {
+          console.error('Ошибка парсинга JSON:', parseError);
+          alert(`Ошибка при парсинге JSON: ${parseError instanceof Error ? parseError.message : 'Неизвестная ошибка'}`);
+        }
+      };
+
+      reader.onerror = () => {
+        alert('Ошибка при чтении файла');
+      };
+
+      reader.readAsText(file, 'UTF-8');
+    } catch (error) {
+      console.error('Ошибка импорта:', error);
+      alert(`Ошибка при импорте файла: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+    }
+    
+    // Сбрасываем значение input, чтобы можно было загрузить тот же файл снова
+    event.target.value = '';
   };
 
   const handleSaveSettings = (newSettings: AppSettings) => {
@@ -234,6 +378,15 @@ function App() {
         <h1>ProjectiON</h1>
         <div className="header-actions">
           <button onClick={() => setShowProjectForm(true)}>+ Создать проект</button>
+          <label className="import-btn">
+            📥 Импорт
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleImportProjects}
+              style={{ display: 'none' }}
+            />
+          </label>
           <button onClick={() => setShowSettings(true)}>⚙️ Настройки</button>
         </div>
       </header>
@@ -263,9 +416,27 @@ function App() {
           </div>
         )}
 
+        {editingProject && (
+          <div className="modal">
+            <div className="modal-content">
+              <ProjectEditForm
+                project={editingProject}
+                onSubmit={handleUpdateProject}
+                onCancel={() => setEditingProject(null)}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="content-sections">
           <div className="content-section full-screen">
-            <ProjectList projects={projects} overrides={overrides} settings={settings} onDelete={handleDeleteProject} />
+            <ProjectList 
+              projects={projects} 
+              overrides={overrides} 
+              settings={settings} 
+              onDelete={handleDeleteProject}
+              onEdit={(project) => setEditingProject(project)}
+            />
           </div>
 
           {projects.length > 0 && (

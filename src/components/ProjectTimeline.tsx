@@ -34,50 +34,58 @@ export function ProjectTimeline({ projects }: ProjectTimelineProps) {
   return (
     <div className="project-timeline">
       <h2>Timeline проектов</h2>
-      <div className="timeline-container">
-        <div className="timeline-scale">
-          {dateLabels.map((labelDate, idx) => {
-            const offset = differenceInDays(labelDate, timelineStart);
-            const leftPercent = (offset / totalDays) * 100;
-            
+      <div className="timeline-wrapper">
+        <div className="timeline-labels-container">
+          {projects.map(project => (
+            <div key={project.id} className="timeline-label-row">
+              <div className="timeline-label" title={project.name}>{project.name}</div>
+            </div>
+          ))}
+        </div>
+        <div className="timeline-container">
+          <div className="timeline-scale">
+            {dateLabels.map((labelDate, idx) => {
+              const offset = differenceInDays(labelDate, timelineStart);
+              const leftPercent = (offset / totalDays) * 100;
+              
+              return (
+                <div
+                  key={idx}
+                  className="timeline-scale-marker"
+                  style={{ left: `${leftPercent}%` }}
+                >
+                  <div className="timeline-scale-line" />
+                  <div className="timeline-scale-label">
+                    {format(labelDate, 'dd.MM')}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {projects.map(project => {
+            const projectStart = project.startDate < timelineStart ? timelineStart : project.startDate;
+            const startOffset = differenceInDays(projectStart, timelineStart);
+            const duration = differenceInDays(project.deadline, projectStart) + 1;
+            const leftPercent = (startOffset / totalDays) * 100;
+            const widthPercent = (duration / totalDays) * 100;
+
             return (
-              <div
-                key={idx}
-                className="timeline-scale-marker"
-                style={{ left: `${leftPercent}%` }}
-              >
-                <div className="timeline-scale-line" />
-                <div className="timeline-scale-label">
-                  {format(labelDate, 'dd.MM')}
+              <div key={project.id} className="timeline-row">
+                <div className="timeline-bar-container">
+                  <div
+                    className="timeline-bar"
+                    style={{
+                      left: `${leftPercent}%`,
+                      width: `${widthPercent}%`,
+                      backgroundColor: project.color,
+                    }}
+                    title={`${project.name}: ${formatDate(project.startDate)} - ${formatDate(project.deadline)}`}
+                  />
                 </div>
               </div>
             );
           })}
         </div>
-        {projects.map(project => {
-          const projectStart = project.startDate < timelineStart ? timelineStart : project.startDate;
-          const startOffset = differenceInDays(projectStart, timelineStart);
-          const duration = differenceInDays(project.deadline, projectStart) + 1;
-          const leftPercent = (startOffset / totalDays) * 100;
-          const widthPercent = (duration / totalDays) * 100;
-
-          return (
-            <div key={project.id} className="timeline-row">
-              <div className="timeline-label">{project.name}</div>
-              <div className="timeline-bar-container">
-                <div
-                  className="timeline-bar"
-                  style={{
-                    left: `${leftPercent}%`,
-                    width: `${widthPercent}%`,
-                    backgroundColor: project.color,
-                  }}
-                  title={`${project.name}: ${formatDate(project.startDate)} - ${formatDate(project.deadline)}`}
-                />
-              </div>
-            </div>
-          );
-        })}
       </div>
     </div>
   );
