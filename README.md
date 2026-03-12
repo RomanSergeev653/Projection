@@ -40,11 +40,28 @@ npm run dev
 # Собрать проект
 npm run build
 
-# Запустить preview
+# Запустить preview (с base path /projection/)
 npm run preview
+
+# Или preview без base path (для локального тестирования)
+npm run preview:local
 ```
 
 Собранные файлы в папке `dist/` можно развернуть на любом веб-сервере.
+
+### Развертывание на сервере
+
+Проект настроен для работы по адресу `https://your-server-ip/projection`
+
+**Быстрое развертывание:**
+
+```bash
+# Используйте автоматический скрипт
+chmod +x deploy.sh
+./deploy.sh
+```
+
+Подробные инструкции по развертыванию на сервере см. в [SERVER_DEPLOY.md](./SERVER_DEPLOY.md)
 
 ## Использование
 

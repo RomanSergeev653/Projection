@@ -1,0 +1,61 @@
+# Пример конфигурации Nginx для развертывания ProjectiON
+# Скопируйте этот файл в /etc/nginx/sites-available/projection
+# и создайте симлинк в /etc/nginx/sites-enabled/
+
+server {
+    listen 80;
+    server_name your-server-ip;  # Замените на IP адрес вашего сервера или домен
+
+    # Корневая директория для всего сайта
+    root /var/www/html;
+    index index.html;
+
+    # Локация для ProjectiON приложения
+    location /projection/ {
+        alias /var/www/html/projection/dist/;
+        try_files $uri $uri/ /projection/index.html;
+        
+        # Кэширование статических файлов
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+
+    # Обработка ошибок
+    error_page 404 /projection/index.html;
+}
+
+# Если используете HTTPS (рекомендуется)
+# Раскомментируйте и настройте после получения SSL сертификата
+#
+# server {
+#     listen 443 ssl http2;
+#     server_name your-server-ip;
+#
+#     ssl_certificate /path/to/certificate.crt;
+#     ssl_certificate_key /path/to/private.key;
+#
+#     root /var/www/html;
+#     index index.html;
+#
+#     location /projection/ {
+#         alias /var/www/html/projection/dist/;
+#         try_files $uri $uri/ /projection/index.html;
+#         
+#         location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+#             expires 1y;
+#             add_header Cache-Control "public, immutable";
+#         }
+#     }
+#
+#     error_page 404 /projection/index.html;
+# }
+#
+# # Редирект с HTTP на HTTPS
+# server {
+#     listen 80;
+#     server_name your-server-ip;
+#     return 301 https://$server_name$request_uri;
+# }
+

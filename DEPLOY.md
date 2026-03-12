@@ -72,51 +72,168 @@ npm run preview
 
 ## Развертывание на веб-сервере
 
-### Вариант 1: Простой HTTP сервер
+Проект настроен для работы по адресу `https://your-server-ip/projection`
+
+### Быстрое развертывание (автоматический скрипт)
+
+```bash
+# 1. Сделайте скрипт исполняемым
+chmod +x deploy.sh
+
+# 2. Запустите развертывание (по умолчанию в /var/www/html/projection)
+./deploy.sh
+
+# Или укажите свой путь:
+./deploy.sh /path/to/your/web/directory/projection
+```
+
+### Вариант 1: Nginx (рекомендуется)
+
+#### Шаг 1: Сборка проекта
+
+```bash
+npm run build
+```
+
+#### Шаг 2: Копирование файлов на сервер
+
+```bash
+# Создайте директорию на сервере
+sudo mkdir -p /var/www/html/projection
+
+# Скопируйте собранные файлы
+sudo cp -r dist/* /var/www/html/projection/
+
+# Установите права доступа
+sudo chown -R www-data:www-data /var/www/html/projection
+sudo chmod -R 755 /var/www/html/projection
+```
+
+#### Шаг 3: Настройка Nginx
+
+Скопируйте пример конфигурации:
+
+```bash
+sudo cp nginx.conf.example /etc/nginx/sites-available/projection
+```
+
+Отредактируйте файл `/etc/nginx/sites-available/projection`:
+
+```nginx
+server {
+    listen 80;
+    server_name your-server-ip;  # Замените на IP адрес вашего сервера
+
+    root /var/www/html;
+    index index.html;
+
+    location /projection/ {
+        alias /var/www/html/projection/dist/;
+        try_files $uri $uri/ /projection/index.html;
+        
+        # Кэширование статических файлов
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+
+    error_page 404 /projection/index.html;
+}
+```
+
+Активируйте конфигурацию:
+
+```bash
+# Создайте симлинк
+sudo ln -s /etc/nginx/sites-available/projection /etc/nginx/sites-enabled/
+
+# Проверьте конфигурацию
+sudo nginx -t
+
+# Перезагрузите Nginx
+sudo systemctl reload nginx
+```
+
+#### Шаг 4: Проверка
+
+Откройте в браузере: `http://your-server-ip/projection`
+
+### Вариант 2: Apache
+
+#### Шаг 1: Сборка проекта
+
+```bash
+npm run build
+```
+
+#### Шаг 2: Копирование файлов
+
+```bash
+sudo mkdir -p /var/www/html/projection
+sudo cp -r dist/* /var/www/html/projection/
+sudo chown -R www-data:www-data /var/www/html/projection
+```
+
+#### Шаг 3: Настройка Apache
+
+Создайте файл `/etc/apache2/sites-available/projection.conf`:
+
+```apache
+<VirtualHost *:80>
+    ServerName your-server-ip
+    
+    DocumentRoot /var/www/html
+    
+    <Directory /var/www/html/projection>
+        Options -Indexes +FollowSymLinks
+        AllowOverride All
+        Require all granted
+        
+        RewriteEngine On
+        RewriteBase /projection/
+        RewriteRule ^index\.html$ - [L]
+        RewriteCond %{REQUEST_FILENAME} !-f
+        RewriteCond %{REQUEST_FILENAME} !-d
+        RewriteRule . /projection/index.html [L]
+    </Directory>
+</VirtualHost>
+```
+
+Активируйте сайт:
+
+```bash
+sudo a2ensite projection.conf
+sudo a2enmod rewrite
+sudo systemctl reload apache2
+```
+
+### Вариант 3: Простой HTTP сервер (для тестирования)
 
 ```bash
 # После сборки
 npm run build
 
-# Использовать встроенный preview
-npm run preview
-
-# Или использовать любой статический сервер
-cd dist
-python3 -m http.server 8000
-# Или
-npx serve dist
+# Запустите preview с base path
+npm run preview -- --base /projection/
 ```
 
-### Вариант 2: Nginx
+### Настройка HTTPS (рекомендуется для продакшена)
 
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-    root /path/to/ProjectON/dist;
-    index index.html;
+После настройки HTTP, установите SSL сертификат:
 
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-}
+```bash
+# Используя Let's Encrypt (Certbot)
+sudo apt-get update
+sudo apt-get install certbot python3-certbot-nginx
+
+# Получите сертификат
+sudo certbot --nginx -d your-domain.com
+
+# Или для IP адреса используйте самоподписанный сертификат
 ```
 
-### Вариант 3: Apache
-
-Создайте файл `.htaccess` в папке `dist/`:
-
-```apache
-<IfModule mod_rewrite.c>
-  RewriteEngine On
-  RewriteBase /
-  RewriteRule ^index\.html$ - [L]
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule . /index.html [L]
-</IfModule>
-```
+Обновите конфигурацию Nginx для HTTPS (см. пример в `nginx.conf.example`)
 
 ## Важные замечания
 
